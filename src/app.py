@@ -29,104 +29,40 @@ st.markdown("""
         background-color: #F8FAFC;
     }
 
-    /* Hero Card Styling */
-    .hero-card {
-        background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
-        border: 1px solid #E2E8F0;
-        border-radius: 20px;
-        padding: 28px 32px;
-        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.06), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
-        margin-bottom: 24px;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .hero-card::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, #0284C7, #38BDF8, #6366F1);
-    }
-
-    /* Interactive Stat Micro-Cards */
-    .hero-stat-box {
-        background: #FFFFFF;
-        border: 1px solid #EEF2F6;
-        border-radius: 14px;
-        padding: 16px 18px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-
-    .hero-stat-box:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
-        border-color: #CBD5E1;
-    }
-
-    .stat-label {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #64748B;
-        margin-bottom: 6px;
-    }
-
-    .stat-val {
-        font-size: 20px;
-        font-weight: 800;
-        color: #0F172A;
-        letter-spacing: -0.02em;
-    }
-
-    /* Range Progress Bar */
-    .range-bar-track {
-        width: 100%;
-        height: 8px;
-        background: #E2E8F0;
-        border-radius: 9999px;
-        position: relative;
-        margin-top: 10px;
-        margin-bottom: 4px;
-        overflow: visible;
-    }
-
-    .range-bar-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #38BDF8, #0284C7);
-        border-radius: 9999px;
-    }
-
-    .range-indicator {
-        position: absolute;
-        top: -4px;
-        width: 16px;
-        height: 16px;
-        background: #0284C7;
-        border: 2px solid #FFFFFF;
-        border-radius: 50%;
-        box-shadow: 0 2px 6px rgba(2, 132, 199, 0.4);
-        transform: translateX(-50%);
-    }
-
-    /* Standard Card Elevation */
+    /* Modern Card Elevation */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
         border-radius: 16px !important;
-        box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.04) !important;
+        box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.05) !important;
         padding: 16px 20px !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    /* Badges */
+    [data-testid="stVerticalBlockBorderWrapper"]:hover {
+        box-shadow: 0 8px 20px -4px rgba(15, 23, 42, 0.08) !important;
+    }
+
+    /* Metric Typography */
+    [data-testid="stMetricLabel"] {
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: #64748B !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        font-size: 22px !important;
+        font-weight: 800 !important;
+        color: #0F172A !important;
+    }
+
+    /* Custom Badges */
     .pill-tag {
         display: inline-block;
         padding: 4px 10px;
-        border-radius: 8px;
+        border-radius: 6px;
         font-size: 12px;
         font-weight: 600;
         background: #F1F5F9;
@@ -181,9 +117,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Header Title
 st.title("⚡ vibe-check-nse")
-st.markdown("<p style='color: #64748B; font-size: 14px; margin-top: -12px; font-weight: 500;'>Institutional Equity Terminal • FinBERT NLP • Technical Confluence • Fundamental Radar</p>", unsafe_allow_html=True)
+st.caption("Institutional Equity Terminal • FinBERT NLP • Technical Confluence • Fundamental Radar")
 
 # 1. Top Institutional FII/DII Status Bar
 fii_dii = fetch_fii_dii_activity()
@@ -196,18 +131,17 @@ with st.container(border=True):
 
 st.write("")
 
-# 2. Unified Single Search Bar (All NSE Companies & Symbols in One)
+# 2. Unified Single Search Bar
 nse_df = load_all_nse_symbols()
 stock_options = [f"{row['Symbol']} — {row['Company Name']}" for _, row in nse_df.iterrows()]
 
-# Default to TCS
 default_idx = next((i for i, s in enumerate(stock_options) if s.startswith("TCS —")), 0)
 
 selected_stock = st.selectbox(
     "Search any NSE Company name or Symbol (e.g. TCS, Tata Motors, Mazagon, GRSE, HDFC)",
     options=stock_options,
     index=default_idx,
-    help="Type any company name or ticker to filter through all listed NSE equities."
+    help="Type any company name or ticker to filter through listed NSE equities."
 )
 
 symbol, company_name = resolve_ticker(selected_stock, nse_df)
@@ -233,58 +167,46 @@ if symbol:
         pct_52w = ((ltp - fund['low_52w']) / range_52w * 100) if range_52w > 0 else 50.0
         pct_52w = max(0.0, min(100.0, pct_52w))
 
-        # 3. INTERACTIVE HERO CARD
-        st.markdown(f"""
-        <div class="hero-card">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
-                <div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <h2 style="margin: 0; color: #0F172A; font-weight: 800; font-size: 28px; letter-spacing: -0.02em;">{fund['short_name']}</h2>
-                    </div>
-                    <div style="margin-top: 8px;">
-                        <span class="pill-tag" style="background: #0284C7; color: white; border: none; font-weight: 700;">{symbol}</span>
-                        <span class="pill-tag">{fund['sector']}</span>
-                        <span class="pill-tag">{fund['industry']}</span>
-                    </div>
+        # 3. NATIVE ELEVATED HERO CARD (Zero Markdown Indentation Bugs)
+        with st.container(border=True):
+            h_left, h_right = st.columns([3, 2])
+            with h_left:
+                st.markdown(f"<h2 style='margin: 0; color: #0F172A; font-weight: 800; font-size: 28px;'>{fund['short_name']}</h2>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style='margin-top: 8px;'>
+                    <span class='pill-tag' style='background:#0284C7; color:white; border:none; font-weight:700;'>{symbol}</span>
+                    <span class='pill-tag'>{fund['sector']}</span>
+                    <span class='pill-tag'>{fund['industry']}</span>
                 </div>
-                <div style="text-align: right;">
-                    <div class="stat-label" style="margin-bottom: 2px;">LIVE LAST TRADED PRICE</div>
-                    <div style="font-size: 34px; font-weight: 900; color: #0F172A; letter-spacing: -0.03em;">₹{ltp:,.2f}</div>
-                    <div style="font-size: 14px; font-weight: 700; color: {'#16A34A' if chg >= 0 else '#DC2626'}; margin-top: 2px;">
-                        {'+' if chg >= 0 else ''}{chg:.2f} ({chg_pct:+.2f}%) Today
-                    </div>
-                </div>
-            </div>
+                """, unsafe_allow_html=True)
+            with h_right:
+                st.metric(
+                    label="Last Traded Price",
+                    value=f"₹{ltp:,.2f}",
+                    delta=f"{'+' if chg >= 0 else ''}{chg:.2f} ({chg_pct:+.2f}%) Today"
+                )
 
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 24px;">
-                <div class="hero-stat-box">
-                    <div class="stat-label">DAY RANGE</div>
-                    <div class="stat-val" style="font-size: 17px;">₹{fund['day_low']:,.2f} — ₹{fund['day_high']:,.2f}</div>
-                    <div style="font-size: 11px; color: #64748B; margin-top: 4px;">Spread: ₹{fund['day_high'] - fund['day_low']:.2f}</div>
-                </div>
-                <div class="hero-stat-box">
-                    <div class="stat-label">52-WEEK RANGE ({pct_52w:.1f}%)</div>
-                    <div class="stat-val" style="font-size: 17px;">₹{fund['low_52w']:,.2f} — ₹{fund['high_52w']:,.2f}</div>
-                    <div class="range-bar-track">
-                        <div class="range-bar-fill" style="width: {pct_52w}%;"></div>
-                        <div class="range-indicator" style="left: {pct_52w}%;"></div>
-                    </div>
-                </div>
-                <div class="hero-stat-box">
-                    <div class="stat-label">VOLUME</div>
-                    <div class="stat-val">{tech['volume'] / 100000:.2f} Lakhs</div>
-                    <div style="font-size: 11px; font-weight: 700; color: {'#16A34A' if tech['volume_surge'] else '#64748B'}; margin-top: 4px;">
-                        {'⚡ Volume Surge' if tech['volume_surge'] else 'Normal Activity'}
-                    </div>
-                </div>
-                <div class="hero-stat-box">
-                    <div class="stat-label">MARKET CAP</div>
-                    <div class="stat-val">₹{fund['market_cap_cr']:,.1f} Cr</div>
-                    <div style="font-size: 11px; color: #0284C7; font-weight: 600; margin-top: 4px;">P/E: {fund['pe_ratio'] if fund['pe_ratio'] else 'N/A'}</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            st.divider()
+
+            # 4 Elevated Micro-Cards inside the Hero Card
+            stat1, stat2, stat3, stat4 = st.columns(4)
+            with stat1:
+                with st.container(border=True):
+                    st.metric("Day Range", f"₹{fund['day_low']:,.1f} — ₹{fund['day_high']:,.1f}")
+                    st.caption(f"Spread: ₹{fund['day_high'] - fund['day_low']:.2f}")
+            with stat2:
+                with st.container(border=True):
+                    st.metric("52-Week Range", f"₹{fund['low_52w']:,.1f} — ₹{fund['high_52w']:,.1f}")
+                    st.progress(min(100, int(pct_52w)))
+                    st.caption(f"**{pct_52w:.1f}%** from 52W Low")
+            with stat3:
+                with st.container(border=True):
+                    st.metric("Volume", f"{tech['volume'] / 100000:.2f} Lakhs", delta="⚡ Surge" if tech['volume_surge'] else "Normal")
+                    st.caption("Active Session Volume")
+            with stat4:
+                with st.container(border=True):
+                    st.metric("Market Cap", f"₹{fund['market_cap_cr']:,.1f} Cr")
+                    st.caption(f"P/E: **{fund['pe_ratio'] if fund['pe_ratio'] else 'N/A'}**")
 
         # 4. CONFLUENCE SIGNAL BAR
         with st.container(border=True):
