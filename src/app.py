@@ -1,9 +1,11 @@
 import plotly.graph_objects as go
 import streamlit as st
+import pandas as pd
 from data_fetcher import (
+    load_all_nse_symbols,
+    resolve_ticker,
     fetch_company_fundamentals,
     fetch_targeted_news,
-    resolve_ticker,
 )
 from event_classifier import classify_event
 from fii_dii import fetch_fii_dii_activity
@@ -13,7 +15,7 @@ from technicals import fetch_indicator_suite
 
 st.set_page_config(page_title="vibe-check-nse", layout="wide")
 
-# Custom Modern Card & UI CSS
+# Custom Dark Card Layout
 st.markdown("""
 <style>
     .card-container {
@@ -36,10 +38,6 @@ st.markdown("""
         font-size: 12px;
         font-weight: 600;
         display: inline-block;
-    }
-    .badge-danger {
-        background-color: #7F1D1D;
-        color: #F87171;
     }
     .stat-box {
         background-color: #0B0F15;
@@ -65,14 +63,24 @@ with st.container():
 
 st.divider()
 
-col_search, _ = st.columns([2, 3])
-with col_search:
-    user_ticker = st.text_input("Enter NSE Ticker or Company Name", value="MAZDOCK").strip()
+# Load all 500+ NSE Stocks for search/select
+nse_df = load_all_nse_symbols()
+stock_options = [f"{row['Symbol']} — {row['Company Name']}" for _, row in nse_df.iterrows()]
 
-if user_ticker:
-    symbol, company_name = resolve_ticker(user_ticker)
+col_select, col_custom = st.columns([3, 2])
+with col_select:
+    default_idx = next((i for i, s in enumerate(stock_options) if "MAZDOCK" in s), 0)
+    selected_option = st.selectbox("Select Any NSE 500 Stock", options=stock_options, index=default_idx)
+    selected_ticker = selected_option.split(" — ")[0]
+with col_custom:
+    custom_input = st.text_input("Or Type Any Custom NSE Ticker / Symbol", placeholder="e.g. GRSE, COALINDIA, IREDA")
 
-    with st.spinner(f"Aggregating live telemetry for {symbol}..."):
+# Resolve priority (Custom input overrides selectbox if typed)
+target_input = custom_input.strip() if custom_input else selected_ticker
+symbol, company_name = resolve_ticker(target_input, nse_df)
+
+if symbol:
+    with st.spinner(f"Running intelligence pipeline on {company_name} ({symbol})..."):
         df, tech = fetch_indicator_suite(symbol)
         fund = fetch_company_fundamentals(symbol)
         raw_news = fetch_targeted_news(company_name, max_items=12)
@@ -80,15 +88,14 @@ if user_ticker:
         confluence = calculate_confluence(analyzed_news, tech)
 
     if df is None:
-        st.error(f"Could not load market data for {symbol}. Check the symbol.")
+        st.error(f"Could not load market data for {symbol}. Verify the ticker symbol.")
     else:
-        # 1. LIVE PRICE & FUNDAMENTAL BANNER CARD (Similar to Image 3)
+        # LIVE PRICE & FUNDAMENTAL BANNER CARD
         ltp = tech['current_price']
         prev_close = fund['prev_close'] or ltp
         chg = ltp - prev_close
         chg_pct = (chg / prev_close) * 100 if prev_close else 0.0
 
-        # Calculate 52W High Progress
         range_52w = fund['high_52w'] - fund['low_52w']
         pct_52w = ((ltp - fund['low_52w']) / range_52w * 100) if range_52w > 0 else 50.0
         pct_52w = max(0.0, min(100.0, pct_52w))
@@ -148,21 +155,23 @@ if user_ticker:
         </div>
         """, unsafe_allow_html=True)
 
-        # 2. CONFLUENCE SUMMARY METRICS
+        # QUICK CONFLUENCE SUMMARY METRICS
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Current RSI (14)", tech['rsi'], delta="Overbought" if tech['rsi'] > 70 else ("Oversold" if tech['rsi'] < 30 else "Neutral zone"))
         m2.metric("FinBERT Vibe", f"{confluence['sentiment_score']}/100")
         m3.metric("Signal Bias", confluence['verdict'])
-        m4.metric("MACD Crossover", "Bullish" if tech['macd'] > tech['macd_signal'] else "Bearish")
+        m4.metric("MACD Status", "Bullish Crossover" if tech['macd'] > tech['macd_signal'] else "Bearish Crossover")
 
         st.divider()
 
-        # 3. TABS SECTION
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "📊 Technical Confluence",
-            "📰 Classified Live News",
+        # 6 EXPANDED TABS
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "📊 Technical Chart",
+            "📰 Recent News & Vibes",
             "⚡ Indicator Dashboard",
-            "🏛️ Fundamental Radar"
+            "🎯 Analyst Price Targets",
+            "🏛️ Fundamentals",
+            "🧠 AI News Digest"
         ])
 
         with tab1:
@@ -180,9 +189,9 @@ if user_ticker:
 
         with tab2:
             s1, s2, s3 = st.columns(3)
-            s1.success(f"Positive Vibes: {confluence['positive_count']}")
-            s2.warning(f"Neutral Vibes: {confluence['neutral_count']}")
-            s3.error(f"Negative Vibes: {confluence['negative_count']}")
+            s1.success(f"Positive: {confluence['positive_count']}")
+            s2.warning(f"Neutral: {confluence['neutral_count']}")
+            s3.error(f"Negative: {confluence['negative_count']}")
 
             st.write("### Fresh Extracted Headlines (Last 7 Days)")
             for item in analyzed_news:
@@ -203,31 +212,66 @@ if user_ticker:
                 )
 
         with tab3:
-            st.write("### Technical Strength Gauges")
+            st.write("### Technical Strength & Momentum Gauges")
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.markdown("#### RSI (14)")
                 st.progress(min(100, int(tech['rsi'])))
-                st.caption(f"Score: **{tech['rsi']}** — {'🔥 Overbought' if tech['rsi'] > 70 else '❄️ Oversold' if tech['rsi'] < 30 else '✅ Balanced'}")
+                st.caption(f"Score: **{tech['rsi']}** — {'🔥 Overbought' if tech['rsi'] > 70 else '❄️ Oversold' if tech['rsi'] < 30 else '✅ Balanced Momentum'}")
 
             with c2:
                 st.markdown("#### MACD vs Signal")
                 spread = round(tech['macd'] - tech['macd_signal'], 2)
                 st.metric("MACD Spread", spread, delta="Bullish Divergence" if spread >= 0 else "Bearish Divergence")
-                st.caption(f"MACD: {tech['macd']} | Signal: {tech['macd_signal']}")
+                st.caption(f"MACD Line: {tech['macd']} | Signal Line: {tech['macd_signal']}")
 
             with c3:
-                st.markdown("#### Moving Average Trend")
+                st.markdown("#### Trend Against Moving Averages")
                 above_50 = ltp > tech['sma50']
-                st.metric("Trend vs 50 SMA", f"₹{tech['sma50']}", delta="Above (Bullish)" if above_50 else "Below (Bearish)")
-                st.caption(f"20 SMA: ₹{tech['sma20']}")
+                st.metric("50-Day Moving Avg", f"₹{tech['sma50']}", delta="Above (Bullish)" if above_50 else "Below (Bearish)")
+                st.caption(f"20-Day SMA: ₹{tech['sma20']}")
 
         with tab4:
-            st.write("### Valuation & Health Ratios")
+            st.write("### Institutional Analyst Consensus & Price Targets")
+            if fund['target_mean_price'] > 0:
+                upside = ((fund['target_mean_price'] - ltp) / ltp) * 100
+                a1, a2, a3 = st.columns(3)
+                a1.metric("Analyst Consensus Target", f"₹{fund['target_mean_price']}", delta=f"{upside:+.1f}% Expected Return")
+                a2.metric("Target High / Low", f"₹{fund['target_high_price']} / ₹{fund['target_low_price']}")
+                a3.metric("Consensus Recommendation", fund['recommendation'], help="Derived from tracked analyst opinions")
+            else:
+                st.info("No active institutional analyst coverage consensus reported for this ticker.")
+
+        with tab5:
+            st.write("### Valuation & Balance Sheet Health")
             fcol1, fcol2, fcol3 = st.columns(3)
-            fcol1.metric("Trailing P/E", fund['pe_ratio'])
-            fcol1.metric("Forward P/E", fund['forward_pe'])
+            fcol1.metric("Trailing P/E", fund['pe_ratio'] if fund['pe_ratio'] else "N/A")
+            fcol1.metric("Forward P/E", fund['forward_pe'] if fund['forward_pe'] else "N/A")
             fcol2.metric("Price-to-Book (P/B)", fund['price_to_book'])
             fcol2.metric("Return on Equity (ROE)", f"{fund['roe']}%")
-            fcol3.metric("Debt-to-Equity", fund['debt_to_equity'])
+            fcol3.metric("Debt-to-Equity Ratio", fund['debt_to_equity'])
             fcol3.metric("Dividend Yield", f"{fund['dividend_yield']}%")
+
+        with tab6:
+            st.write("### AI Headline Summary & Market Drivers")
+            if analyzed_news:
+                pos_headlines = [n['title'] for n in analyzed_news if n['label'] == 'POSITIVE']
+                neg_headlines = [n['title'] for n in analyzed_news if n['label'] == 'NEGATIVE']
+                
+                col_bull, col_bear = st.columns(2)
+                with col_bull:
+                    st.markdown("#### 🟢 Bullish Narratives Driving Sentiment")
+                    if pos_headlines:
+                        for h in pos_headlines[:4]:
+                            st.write(f"- {h}")
+                    else:
+                        st.write("No major positive catalysts identified in recent news.")
+                with col_bear:
+                    st.markdown("#### 🔴 Bearish Friction & Risks")
+                    if neg_headlines:
+                        for h in neg_headlines[:4]:
+                            st.write(f"- {h}")
+                    else:
+                        st.write("No major negative friction detected in recent headlines.")
+            else:
+                st.info("Insufficient news flow to construct sentiment digest.")
