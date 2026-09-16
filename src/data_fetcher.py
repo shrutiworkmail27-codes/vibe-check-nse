@@ -30,19 +30,28 @@ def load_all_nse_symbols() -> pd.DataFrame:
         return pd.DataFrame(data)
 
 def resolve_ticker(user_input: str, nse_df: pd.DataFrame):
-    clean = user_input.strip().upper().replace(" ", "")
-    match = nse_df[nse_df['Symbol'].str.upper() == clean]
+    if not user_input:
+        return "TCS.NS", "Tata Consultancy Services"
+    
+    # If chosen from dropdown, input will look like "TCS — Tata Consultancy Services Ltd."
+    raw_symbol = user_input.split(" — ")[0].strip().upper().replace(" ", "")
+    
+    # 1. Match symbol column
+    match = nse_df[nse_df['Symbol'].str.upper() == raw_symbol]
     if not match.empty:
         row = match.iloc[0]
         return f"{row['Symbol']}.NS", row['Company Name']
 
-    name_match = nse_df[nse_df['Company Name'].str.upper().str.contains(clean, na=False)]
+    # 2. Match company name containing user input
+    clean_search = user_input.strip().upper()
+    name_match = nse_df[nse_df['Company Name'].str.upper().str.contains(clean_search, na=False)]
     if not name_match.empty:
         row = name_match.iloc[0]
         return f"{row['Symbol']}.NS", row['Company Name']
 
-    raw_sym = clean.replace(".NS", "")
-    return f"{raw_sym}.NS", raw_sym
+    # 3. Direct user input fallback (custom unlisted ticker)
+    clean_sym = raw_symbol.replace(".NS", "")
+    return f"{clean_sym}.NS", clean_sym
 
 def fetch_company_fundamentals(symbol: str) -> dict:
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
